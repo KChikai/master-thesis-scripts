@@ -2,8 +2,12 @@
 
 """
 external memory 確認用
-とりあえず英語での実装を考慮している
 ラベルをデコード部分に入れる（emotion embedding, speaker model）
+入力文の後に半角＋数字を入力することでラベルを挿入する
+
+ex)
+こんにちは，今日もいい天気ですね！ 2
+
 """
 
 import os
@@ -16,14 +20,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from nltk import word_tokenize
 from chainer import serializers, cuda
-from tuning_util import ConvCorpus
+from tuning_util import ConvCorpus, JaConvCorpus
 from external_seq2seq import Seq2Seq
 from setting_param import FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED
 
 
 # path info
 DATA_DIR = './data/corpus/'
-MODEL_PATH = './data/149.model'
+MODEL_PATH = './data/14.model'
 TRAIN_LOSS_PATH = './data/loss_train_data.pkl'
 TEST_LOSS_PATH = './data/loss_test_data.pkl'
 BLEU_SCORE_PATH = './data/bleu_score_data.pkl'
@@ -37,6 +41,8 @@ parser.add_argument('--hidden_num', '-hi', default=HIDDEN_NUM, type=int, help='d
 parser.add_argument('--label_num', '-ln', default=LABEL_NUM, type=int, help='dimension of label layer')
 parser.add_argument('--label_embed', '-le', default=LABEL_EMBED, type=int, help='dimension of label embed layer')
 parser.add_argument('--bar', '-b', default='0', type=int, help='whether to show the graph of loss values or not')
+parser.add_argument('--lang', '-l', default='ja', type=str, help='the choice of a language (Japanese "ja" or English "en" )')
+parser.add_argument('--beam_search', '-be', default=True, type=bool, help='show results using beam search')
 args = parser.parse_args()
 
 # GPU settings
@@ -76,7 +82,13 @@ def interpreter(data_path, model_path):
     :return:
     """
     # call dictionary class
-    corpus = ConvCorpus(file_path=None)
+    if args.lang == 'en':
+        corpus = ConvCorpus(file_path=None)
+    elif args.lang == 'ja':
+        corpus = JaConvCorpus(file_path=None)
+    else:
+        print('You gave wrong argument to this system. Check out your argument about languages.')
+        raise ValueError
     corpus.load(load_dir=data_path)
     print('Vocabulary Size (number of words) :', len(corpus.dic.token2id))
     print('')
@@ -126,8 +138,17 @@ def interpreter(data_path, model_path):
         input_sentence_rev = [corpus.dic.token2id[word] for word in input_vocab_rev if not corpus.dic.token2id.get(word) is None]
 
         model.initialize(batch_size=1)
-        sentence = model.generate(input_sentence,  input_sentence_rev, sentence_limit=len(input_sentence) + 20,
-                                  label_id=label_id, word2id=corpus.dic.token2id, id2word=corpus.dic)
+        if args.beam_search:
+            hypotheses = model.beam_search(model.initial_state_function, model.generate_function,
+                                           input_sentence, start_id=corpus.dic.token2id['<start>'],
+                                           end_id=corpus.dic.token2id['<eos>'], label_id=label_id)
+            for hypothesis in hypotheses:
+                generated_indices = hypothesis.to_sequence_of_values()
+                generated_tokens = [corpus.dic[i] for i in generated_indices]
+                print("--> ", " ".join(generated_tokens))
+        else:
+            sentence = model.generate(input_sentence,  input_sentence_rev, sentence_limit=len(input_sentence) + 20,
+                                      label_id=label_id, word2id=corpus.dic.token2id, id2word=corpus.dic)
         print("-> ", sentence)
         print('')
 
@@ -242,5 +263,5 @@ if __name__ == '__main__':
     test_run(DATA_DIR, MODEL_PATH)
     if args.bar:
         show_chart(TRAIN_LOSS_PATH, TEST_LOSS_PATH)
-        #show_bleu_chart(BLEU_SCORE_PATH)
-        #show_wer_chart(WER_SCORE_PATH)
+        show_bleu_chart(BLEU_SCORE_PATH)
+        show_wer_chart(WER_SCORE_PATH)

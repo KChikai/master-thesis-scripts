@@ -72,7 +72,6 @@ class Decoder(chainer.Chain):
 
         # output using at
         at = F.sigmoid(self.vt(h_next))
-        #print(at.data)
         pg_pre = self.wg(h_next)
         pg = pg_pre * F.broadcast_to((1 - at), shape=(pg_pre.data.shape[0], pg_pre.data.shape[1]))
         pe_pre = self.we(h_next)
@@ -140,7 +139,7 @@ class Seq2Seq(chainer.Chain):
             h_average += h
         h_average /= len(self.h_enc)
         self.h_batch = F.sigmoid(self.ws(h_average))
-        # self.c_batch = F.concat((self.c_batch, self.c_batch_rev))
+        # self.c_batch = F.concat((self.c_batch, self.c_batch_rev)) # TODO: 連結するモデル
         self.c_batch = self.c_batch                                 # TODO: とりあえずencoderの片方のcell batchを渡している
 
     def decode(self, input_id, teacher_id, label_id, word_th, train=True):
@@ -206,8 +205,8 @@ class Seq2Seq(chainer.Chain):
             h_average += h
         h_average /= len(self.h_enc)
         self.h_batch = F.sigmoid(self.ws(h_average))
-        # self.c_batch = F.concat((self.c_batch, self.c_batch_rev))
-        self.c_batch = self.c_batch
+        # self.c_batch = F.concat((self.c_batch, self.c_batch_rev)) # TODO: 連結するモデル
+        self.c_batch = self.c_batch                                 # TODO: とりあえずencoderの片方のcell batchを渡している
 
     def one_decode(self, input_id, teacher_id, label_id, correct_at, train=False):
         """
@@ -272,7 +271,7 @@ class Seq2Seq(chainer.Chain):
 
     @staticmethod
     def beam_search(initial_state_function, generate_function, X, start_id, end_id,
-                    label_id, beam_width=4, num_hypotheses=5, max_length=15):
+                    label_id, beam_width=5, num_hypotheses=5, max_length=15):
         """
         Beam search for neural network sequence to sequence (encoder-decoder) models.
 
@@ -286,6 +285,7 @@ class Seq2Seq(chainer.Chain):
         :param X: List of input token indices in encoder vocabulary.
         :param start_id: Index of <start sequence> token in decoder vocabulary.
         :param end_id: Index of <end sequence> token in decoder vocabulary.
+        :param label_id: Label ID (as an emotion label in this case)
         :param beam_width: Beam size. Default 4.
         :param num_hypotheses: Number of hypotheses to generate. Default 1.
         :param max_length: Length limit for generated sequence. Default 50.
@@ -343,13 +343,14 @@ class Seq2Seq(chainer.Chain):
 
 class Node(object):
     """
+    Beam Search 用のノードクラス
     ステップ毎の出力データの格納クラス
     """
     def __init__(self, parent, state, value, cost):
         super(Node, self).__init__()
         self.value = value
-        self.parent = parent  # parent Node, None for root
-        self.state = state  # recurrent layer hidden state
+        self.parent = parent                                        # parent Node, None for root
+        self.state = state                                          # recurrent layer hidden state
         self.cum_cost = parent.cum_cost + cost if parent else cost  # e.g. -log(p) of sequence up to current node (including)
         self.length = 1 if parent is None else parent.length + 1
         self._sequence = None
