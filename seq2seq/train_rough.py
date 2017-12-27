@@ -13,7 +13,7 @@ import numpy as np
 import chainer
 from chainer import cuda, optimizers, serializers
 from tuning_util import JaConvCorpus, ConvCorpus
-from external_seq2seq import Seq2Seq
+from pretrain_seq2seq import Seq2Seq
 from setting_param import EPOCH, FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED, BATCH_NUM
 
 

@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 """
-speaker model用プレトレイン
-（大量のトレーニング文で学習を行う）
+multitask model用トレーニングスクリプト
+（入力データはラベルがデコーダ入力の最初に付属しているモデル）
 """
 
 import os
@@ -13,9 +13,10 @@ import argparse
 import numpy as np
 import chainer
 from chainer import cuda, optimizers, serializers
-from .tuning_util import JaConvCorpus, ConvCorpus
-from .external_seq2seq import Seq2Seq
-from .setting_param import EPOCH, FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED, BATCH_NUM
+from tuning_util import JaConvCorpus, ConvCorpus
+from pretrain_seq2seq import Seq2Seq
+from external_seq2seq import MultiTaskSeq2Seq
+from setting_param import EPOCH, FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED, BATCH_NUM
 
 # parse command line args
 parser = argparse.ArgumentParser()
@@ -107,25 +108,33 @@ def main():
     ######################
 
     # load pretrain model
-    rough_model = './data/14.model'
-    pretrain_model = Seq2Seq(len(corpus.dic.token2id), feature_num=feature_num, hidden_num=hidden_num,
-                             batch_size=batchsize, gpu_flg=args.gpu)
+    rough_model = './data/10.model'
+    pretrain_model = Seq2Seq(all_vocab_size=len(corpus.dic.token2id), emotion_vocab_size=len(corpus.emotion_set),
+                             feature_num=feature_num, hidden_num=hidden_num, batch_size=batchsize,
+                             label_num=label_num, label_embed_num=label_embed, gpu_flg=args.gpu)
     serializers.load_hdf5(rough_model, pretrain_model)
 
-    model = Seq2Seq(all_vocab_size=len(corpus.dic.token2id), emotion_vocab_size=len(corpus.emotion_set),
-                    feature_num=feature_num, hidden_num=hidden_num, batch_size=batchsize,
-                    label_num=label_num, label_embed_num=label_embed, gpu_flg=args.gpu)
+    model = MultiTaskSeq2Seq(all_vocab_size=len(corpus.dic.token2id), emotion_vocab_size=len(corpus.emotion_set),
+                             feature_num=feature_num, hidden_num=hidden_num, batch_size=batchsize,
+                             label_num=label_num, label_embed_num=label_embed, gpu_flg=args.gpu)
 
     # copy weights
+    # encoder
     model.enc.xe.W = pretrain_model.enc.xe.W
     model.enc.eh.W = pretrain_model.enc.eh.W
     model.enc.hh.W = pretrain_model.enc.hh.W
+    model.enc.eh_rev.W = pretrain_model.enc.eh_rev.W
+    model.enc.hh_rev.W = pretrain_model.enc.hh_rev.W
+    # ws
+    model.ws.W = pretrain_model.ws.W
+    # decoder
     model.dec.ye.W = pretrain_model.dec.ye.W
-    # model.dec.eh.W = pretrain_model.dec.eh.W                  # label embed層があるのでコピーできない
+    model.dec.le.W = pretrain_model.dec.le.W
+    model.dec.eh.W = pretrain_model.dec.eh.W          # label embed層が変わる場合コピーできない
     model.dec.hh.W = pretrain_model.dec.hh.W
-    model.dec.wc.W = pretrain_model.dec.wc.W
-    model.dec.wh.W = pretrain_model.dec.wh.W
-    model.dec.fy.W = pretrain_model.dec.fy.W
+    model.dec.vt.W = pretrain_model.dec.vt.W
+    model.dec.wg.W = pretrain_model.dec.wg.W
+    model.dec.we.W = pretrain_model.dec.we.W
 
     if args.gpu >= 0:
         model.to_gpu()
@@ -142,10 +151,11 @@ def main():
     output_mat = []
     input_mat_rev = []
     label_mat = []
+    topic_vec = []
     # label_index = [index for index in range(label_num)]
     max_input_ren = max_output_ren = 0
     print('start making corpus matrix...')
-    for input_text, output_text in zip(corpus.posts, corpus.cmnts):
+    for input_text, output_text in zip(corpus.fine_posts, corpus.fine_cmnts):
 
         # reverse an input and add eos tag
         output_text.append(corpus.dic.token2id["<eos>"])  # 出力の最後にeosを挿入
@@ -153,6 +163,16 @@ def main():
         # update max sentence length
         max_input_ren = max(max_input_ren, len(input_text))
         max_output_ren = max(max_output_ren, len(output_text))
+
+        # make topic tag
+        topic_label = output_text.pop(0)
+        if topic_label == corpus.dic.token2id['__label__0']:
+            topic_vec.append(0)
+        elif topic_label == corpus.dic.token2id['__label__1']:
+            topic_vec.append(1)
+        else:
+            print('no label error: ', topic_label)
+            raise ValueError
 
         # make a list of lists
         input_mat.append(input_text)
@@ -173,6 +193,9 @@ def main():
             label_mat.append([0 for _ in range(len(output_text))])
         else:
             raise ValueError
+
+    # convert topic label matrix to numpy.array
+    topic_vec = np.array(topic_vec, dtype=np.int32)
 
     # make reverse corpus
     for input_text in input_mat:
@@ -203,6 +226,7 @@ def main():
     # create batch matrix
     print('transpose...')
     input_mat = np.array(input_mat, dtype=np.int32).T
+    input_mat_rev = np.array(input_mat_rev, dtype=np.int32).T
     output_mat = np.array(output_mat, dtype=np.int32).T
     label_mat = np.array(label_mat, dtype=np.int32).T
 
@@ -212,6 +236,7 @@ def main():
     train_output_mat = output_mat
     train_input_mat_rev = input_mat_rev
     train_label_mat = label_mat
+    train_topic_vec = topic_vec
 
     #############################
     #### train seq2seq model ####
@@ -223,20 +248,21 @@ def main():
     for num, epoch in enumerate(range(n_epoch)):
         total_loss = 0
         batch_num = 0
-        perm = np.random.permutation(len(corpus.posts))
+        perm = np.random.permutation(len(corpus.fine_posts))
 
         # for training
-        for i in range(0, len(corpus.posts), batchsize):
+        for i in range(0, len(corpus.fine_posts), batchsize):
 
             # select batch data
-            input_batch = remove_extra_padding(train_input_mat[:, perm[i:i + batchsize]], reverse_flg=True)
+            input_batch = remove_extra_padding(train_input_mat[:, perm[i:i + batchsize]], reverse_flg=False)
             input_batch_rev = remove_extra_padding(train_input_mat_rev[:, perm[i:i + batchsize]], reverse_flg=True)
             output_batch = remove_extra_padding(train_output_mat[:, perm[i:i + batchsize]], reverse_flg=False)
             label_batch = remove_extra_padding(train_label_mat[:, perm[i:i + batchsize]], reverse_flg=False)
+            topic_batch = train_topic_vec[perm[i:i + batchsize]]
 
             # Encode a sentence
             model.initialize(batch_size=input_batch.shape[1])  # initialize cell
-            model.encode(input_batch, input_batch_rev, train=True)  # encode (output: hidden Variable)
+            model.encode(input_batch, input_batch_rev, topic_label=topic_batch, train=True)
 
             # Decode from encoded context
             input_ids = xp.array([corpus.dic.token2id["<start>"] for _ in range(batchsize)])
@@ -246,8 +272,8 @@ def main():
                 accum_loss += loss
 
             # learn model
-            model.cleargrads()  # initialize all grad to zero
-            accum_loss.backward()  # back propagation
+            model.cleargrads()      # initialize all grad to zero
+            accum_loss.backward()   # back propagation
             optimizer.update()
             total_loss += float(accum_loss.data)
             batch_num += 1

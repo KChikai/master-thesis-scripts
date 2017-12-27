@@ -11,7 +11,6 @@ import chainer
 import chainer.functions as F
 import chainer.links as L
 from chainer import cuda, Variable
-from setting_param import TOPIC_NUM, TOPIC_EMBED
 
 # global variable (initialize)
 xp = np
@@ -46,23 +45,6 @@ class Encoder(chainer.Chain):
         h_next_rev = F.where(enable_rev, h_tmp_rev, h_pre_rev)                                      # if x!=-1, h_tmp . elseif x=-1, h_pre.
 
         return c_next, h_next, c_next_rev, h_next_rev
-
-
-class TopicLabel(chainer.Chain):
-    def __init__(self, topic_num, topic_embed_size, hidden_size):
-        super(TopicLabel, self).__init__(
-            # label embed
-            xe=L.EmbedID(topic_num, topic_embed_size, ignore_label=-1),
-            # 2 layers
-            l1=L.Linear(topic_embed_size, hidden_size),
-            l2=L.Linear(hidden_size, topic_embed_size),
-        )
-
-    def __call__(self, x, train=True):
-        e = F.tanh(self.xe(x))
-        o1 = F.dropout(F.relu(self.l1(e)), ratio=0.2, train=train)
-        o2 = F.dropout(F.relu(self.l2(o1)), ratio=0.2, train=train)
-        return o2
 
 
 class Decoder(chainer.Chain):
@@ -101,7 +83,7 @@ class Decoder(chainer.Chain):
         return F.concat((pg, pe)), at, c_next, h_next
 
 
-class MultiTaskSeq2Seq(chainer.Chain):
+class Seq2Seq(chainer.Chain):
 
     def __init__(self, all_vocab_size, emotion_vocab_size, feature_num, hidden_num,
                  label_num, label_embed_num, batch_size, gpu_flg):
@@ -124,23 +106,18 @@ class MultiTaskSeq2Seq(chainer.Chain):
         self.h_batch_rev = Variable(xp.zeros((batch_size, self.hidden_num), dtype=xp.float32))
         self.h_enc = []                                                         # for calculating alpha
 
-        super(MultiTaskSeq2Seq, self).__init__(
+        super(Seq2Seq, self).__init__(
             enc=Encoder(all_vocab_size, feature_num, hidden_num),               # encoder
-            top=TopicLabel(TOPIC_NUM, TOPIC_EMBED, hidden_num),                 # トピックのラベル層
-
             ws=L.Linear(hidden_num * 2, hidden_num),                            # TODO: エンコーダの隠れ層をデコーダに渡す
-            tae=L.Linear(hidden_num + TOPIC_EMBED, hidden_num),                 # TODO: トピックエンベッドとエンコーダの集約層
-
             dec=Decoder(all_vocab_size, emotion_vocab_size, feature_num,
                         hidden_num, label_num, label_embed_num)                 # decoder
         )
 
-    def encode(self, input_batch, input_batch_rev, topic_label, train):
+    def encode(self, input_batch, input_batch_rev, train):
         """
         Input batch of sequence and update self.c (context vector) and self.h (hidden vector)
-        :param input_batch: batch of input text embed id ex) [[ 1, 0 ,14 ,5 ], [ ...] , ...]
+        :param input_batch: batch of input text embed id ex.) [[ 1, 0 ,14 ,5 ], [ ...] , ...]
         :param input_batch_rev: reversed input batch
-        :param topic_label: int label of topic
         :param train : True or False
         """
         # check the size of batch lists
@@ -156,19 +133,12 @@ class MultiTaskSeq2Seq(chainer.Chain):
                                                                                       batch_word_rev, self.c_batch_rev, self.h_batch_rev, train=train)
             self.h_enc.append(F.concat((self.h_batch, self.h_batch_rev)))
 
-        # encode topic label
-        topic_label = chainer.Variable(xp.array(topic_label, dtype=xp.int32))
-        topic_label_embed = self.top(topic_label, train=train)
-
-        # calculate an initial state to send to decoder
+        # calculate initial state
         h_average = 0
         for h in self.h_enc:
             h_average += h
         h_average /= len(self.h_enc)
-
-        # concat topic_embed and encoder
-        self.h_batch = self.tae(F.concat((F.sigmoid(self.ws(h_average)), topic_label_embed)))
-
+        self.h_batch = F.sigmoid(self.ws(h_average))
         # self.c_batch = F.concat((self.c_batch, self.c_batch_rev)) # TODO: 連結するモデル
         self.c_batch = self.c_batch                                 # TODO: とりあえずencoderの片方のcell batchを渡している
 

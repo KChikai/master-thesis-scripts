@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 
 """
-external memory 確認用
+external memory 確認用（pretrain）
 ラベルをデコード部分に入れる（emotion embedding, speaker model）
 入力文の後に半角＋数字を入力することでラベルを挿入する
 
@@ -21,13 +21,13 @@ import matplotlib.pyplot as plt
 from nltk import word_tokenize
 from chainer import serializers, cuda
 from tuning_util import ConvCorpus, JaConvCorpus
-from external_seq2seq import Seq2Seq
+from pretrain_seq2seq import Seq2Seq
 from setting_param import FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED
 
 
 # path info
 DATA_DIR = './data/corpus/'
-MODEL_PATH = './data/14.model'
+MODEL_PATH = './data/10.model'
 TRAIN_LOSS_PATH = './data/loss_train_data.pkl'
 TEST_LOSS_PATH = './data/loss_test_data.pkl'
 BLEU_SCORE_PATH = './data/bleu_score_data.pkl'
@@ -140,7 +140,8 @@ def interpreter(data_path, model_path):
         model.initialize(batch_size=1)
         if args.beam_search:
             hypotheses = model.beam_search(model.initial_state_function, model.generate_function,
-                                           input_sentence, start_id=corpus.dic.token2id['<start>'],
+                                           X=input_sentence, X_rev=input_sentence_rev,
+                                           start_id=corpus.dic.token2id['<start>'],
                                            end_id=corpus.dic.token2id['<eos>'], label_id=label_id)
             for hypothesis in hypotheses:
                 generated_indices = hypothesis.to_sequence_of_values()
@@ -161,9 +162,15 @@ def test_run(data_path, model_path, n_show=80):
     :return:
     """
 
-    corpus = ConvCorpus(file_path=None)
+    # call dictionary class
+    if args.lang == 'en':
+        corpus = ConvCorpus(file_path=None)
+    elif args.lang == 'ja':
+        corpus = JaConvCorpus(file_path=None)
+    else:
+        print('You gave wrong argument to this system. Check out your argument about languages.')
+        raise ValueError
     corpus.load(load_dir=data_path)
-
     print('Vocabulary Size (number of words) :', len(corpus.dic.token2id))
     print('')
 
@@ -174,13 +181,13 @@ def test_run(data_path, model_path, n_show=80):
     serializers.load_hdf5(model_path, model)
 
     # run an interpreter
-    for num, input_sentence in enumerate(corpus.posts):
+    for num, input_sentence in enumerate(corpus.rough_posts):
         id_sequence = input_sentence.copy()
-        input_sentence = input_sentence[::-1]
+        input_sentence_rev = input_sentence[::-1]
 
         # make label lists TODO: 3値分類
         n_num = p_num = 0
-        for word in corpus.cmnts[num]:
+        for word in corpus.rough_cmnts[num]:
             if corpus.dic[word] in corpus.neg_words:
                 n_num += 1
             if corpus.dic[word] in corpus.pos_words:
@@ -196,10 +203,10 @@ def test_run(data_path, model_path, n_show=80):
 
         # generate an output
         model.initialize(batch_size=1)  # initialize cell
-        sentence = model.generate(input_sentence, sentence_limit=len(input_sentence) + 20,
+        sentence = model.generate(input_sentence, input_sentence_rev, sentence_limit=len(input_sentence) + 20,
                                   label_id=label_id, word2id=corpus.dic.token2id, id2word=corpus.dic)
-        print("teacher : ", " ".join([corpus.dic[w_id] for w_id in id_sequence]))
-        print("correct :", " ".join([corpus.dic[w_id] for w_id in corpus.cmnts[num]]), label_id)
+        print("teacher : ", " ".join([corpus.dic[w_id] for w_id in id_sequence]), label_id)
+        print("correct :", " ".join([corpus.dic[w_id] for w_id in corpus.rough_cmnts[num]]))
         print("-> ", sentence)
         print('')
 

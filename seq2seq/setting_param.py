@@ -3,9 +3,13 @@ EPOCH = 200
 FEATURE_NUM = 256
 HIDDEN_NUM = 512
 
+# for emotion
 LABEL_NUM = 3
 LABEL_EMBED = 64
 
-BATCH_NUM = 350
+# for topic label
+TOPIC_NUM = 2
+TOPIC_EMBED = 64
 
+BATCH_NUM = 350
 
