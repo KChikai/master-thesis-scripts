@@ -123,7 +123,6 @@ def interpreter(data_path, model_path):
         if label_false_flg:
             print('caution: you donot set any enable tags!')
             input_vocab = sentence.split(' ')
-            input_vocab.pop(-1)
             label_id = -1
 
         if args.lang == 'en':

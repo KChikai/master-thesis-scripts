@@ -1,6 +1,6 @@
 # -*- coding:utf-8 -*-
 """
-speaker model用プレトレイン
+speaker model (with external memory) 用プレトレイン
 （大量のトレーニング文で学習を行う）
 """
 

@@ -215,10 +215,11 @@ class MultiTaskSeq2Seq(chainer.Chain):
         self.h_batch_rev = Variable(xp.zeros((batch_size, self.hidden_num), dtype=xp.float32))
         self.h_enc.clear()
 
-    def one_encode(self, src_text, src_text_rev, train=False):
+    def one_encode(self, src_text, src_text_rev, topic_label, train=False):
         """
         :param src_text: input text embed id ex.) [ 1, 0 ,14 ,5 ]
         :param src_text_rev:
+        :param topic_label: int label of topic
         :param train : True or False
         :return: context vector (hidden vector)
         """
@@ -229,12 +230,19 @@ class MultiTaskSeq2Seq(chainer.Chain):
                                                                                       word_rev, self.c_batch_rev, self.h_batch_rev, train=train)
             self.h_enc.append(F.concat((self.h_batch, self.h_batch_rev)))
 
-        # calculate initial state
+        # encode topic label
+        topic_label = chainer.Variable(xp.array([topic_label], dtype=xp.int32))
+        topic_label_embed = self.top(topic_label, train=train)
+
+        # calculate an initial state to send to decoder
         h_average = 0
         for h in self.h_enc:
             h_average += h
         h_average /= len(self.h_enc)
-        self.h_batch = F.sigmoid(self.ws(h_average))
+
+        # concat topic_embed and encoder
+        self.h_batch = self.tae(F.concat((F.sigmoid(self.ws(h_average)), topic_label_embed)))
+
         # self.c_batch = F.concat((self.c_batch, self.c_batch_rev)) # TODO: 連結するモデル
         self.c_batch = self.c_batch                                 # TODO: とりあえずencoderの片方のcell batchを渡している
 
@@ -256,24 +264,25 @@ class MultiTaskSeq2Seq(chainer.Chain):
         else:
             return predict_vec
 
-    def generate(self, src_text, src_text_rev, sentence_limit, word2id, id2word, label_id):
+    def generate(self, src_text, src_text_rev, sentence_limit, word2id, id2word, emo_label_id, topic_label_id):
         """
         :param src_text: input text embed id ex.) [ 1, 0 ,14 ,5 ]
         :param src_text_rev:
         :param sentence_limit:
         :param word2id:
         :param id2word:
-        :param label_id:
+        :param emo_label_id:
+        :param topic_label_id
         :return:
         """
         self.initialize(batch_size=1)
-        self.one_encode(src_text, src_text_rev, train=False)
+        self.one_encode(src_text, src_text_rev, topic_label_id, train=False)
 
         sentence = ""
         word_id = word2id["<start>"]
         for _ in range(sentence_limit):
             predict_vec = self.one_decode(input_id=word_id, teacher_id=None,
-                                          label_id=label_id, correct_at=None, train=False)
+                                          label_id=emo_label_id, correct_at=None, train=False)
             word = id2word[xp.argmax(predict_vec.data)]     # choose word_ID which has the highest probability
             word_id = word2id[word]
             if word == "<eos>":
@@ -281,9 +290,9 @@ class MultiTaskSeq2Seq(chainer.Chain):
             sentence = sentence + word + " "
         return sentence
 
-    def initial_state_function(self, X, X_rev):
+    def initial_state_function(self, X, X_rev, topic_label):
         self.initialize(batch_size=1)
-        self.one_encode(X, X_rev, train=False)
+        self.one_encode(X, X_rev, topic_label, train=False)
         return self.c_batch, self.h_batch
 
     def generate_function(self, Y_tm1, state_tm1, label_id):
@@ -301,7 +310,7 @@ class MultiTaskSeq2Seq(chainer.Chain):
 
     @staticmethod
     def beam_search(initial_state_function, generate_function, X, X_rev, start_id, end_id,
-                    label_id, beam_width=5, num_hypotheses=5, max_length=15):
+                    emo_label_id, topic_label_id, beam_width=5, num_hypotheses=5, max_length=15):
         """
         Beam search for neural network sequence to sequence (encoder-decoder) models.
 
@@ -315,7 +324,8 @@ class MultiTaskSeq2Seq(chainer.Chain):
         :param X: List of input token indices in encoder vocabulary.
         :param start_id: Index of <start sequence> token in decoder vocabulary.
         :param end_id: Index of <end sequence> token in decoder vocabulary.
-        :param label_id: Label ID (as an emotion label in this case)
+        :param emo_label_id: Label ID (as an emotion label in this case)
+        :param topic_label_id: Label ID (as an topic label in this case)
         :param beam_width: Beam size. Default 4.
         :param num_hypotheses: Number of hypotheses to generate. Default 1.
         :param max_length: Length limit for generated sequence. Default 50.
@@ -327,7 +337,7 @@ class MultiTaskSeq2Seq(chainer.Chain):
         assert X.ndim == 2 and X.shape[1] == 1, "X should be a column array with shape (input-sequence-length, 1)"
 
         # encode
-        next_fringe = [Node(parent=None, state=initial_state_function(X, X_rev), value=start_id, cost=0.0)]
+        next_fringe = [Node(parent=None, state=initial_state_function(X, X_rev, topic_label_id), value=start_id, cost=0.0)]
         hypotheses = []
 
         for _ in range(max_length):
@@ -354,7 +364,7 @@ class MultiTaskSeq2Seq(chainer.Chain):
 
             Y_tm1 = [n.value for n in fringe]
             state_tm1 = [n.state for n in fringe]
-            state_t, p_t = generate_function(Y_tm1, state_tm1, label_id)  # state_t: decの内部状態群, p_t: 各行にpredict_vec(単語次元)が入った行列
+            state_t, p_t = generate_function(Y_tm1, state_tm1, emo_label_id)  # state_t: decの内部状態群, p_t: 各行にpredict_vec(単語次元)が入った行列
             Y_t = np.argsort(p_t, axis=1)[:, -beam_width:]                # Y_t: 大きい値上位beam幅件の配列番号リスト
             next_fringe = []
             for Y_t_n, p_t_n, state_t_n, n in zip(Y_t, p_t, state_t, fringe):
