@@ -468,7 +468,50 @@ def load_test():
         correct_emo_tags = pickle.load(f)
     print(len(correct_emo_tags), correct_emo_tags)
 
+
+def swap_output(swap=True):
+    """
+    出力をランダムスワップするスクリプト
+    それを復元する鍵も作成
+    :return:
+    """
+    if swap:
+        previous_file = './annotation_files/annotation1.xlsx'
+        save_file = './annotation_files/annotation1_swap.xlsx'
+
+        sheet_name = 'annotation1'
+        data_frame = pd.read_excel(previous_file, sheet_name=sheet_name)
+        # data_flame.columns = ['topic', 'input', 'output_A', 'output_B', 'fluency_A',
+        #                       'fluency_B', 'consistency_A', 'consistency_B', 'domain_consistency', 'emotion']
+        swap_keys = []
+        new_frame = data_frame.copy()
+        for index, line in new_frame.ix[:, :].iterrows():
+            binary = np.random.randint(0, 2)
+            swap_keys.append(binary)
+            if binary:
+                a_output = line["output_A"]
+                b_output = line["output_B"]
+                # line["output_A"] = b_output
+                # line["output_B"] = a_output
+                new_frame.ix[[index], ["output_A"]] = b_output
+                new_frame.ix[[index], ["output_B"]] = a_output
+
+        # save a file
+        writer = pd.ExcelWriter(save_file)
+        new_frame.to_excel(writer, sheet_name)
+
+        with open('annotation_files/swap_keys.pkl', 'wb') as f:
+            pickle.dump(swap_keys, f)
+        for k in swap_keys:
+            print(k)
+    else:
+        pass
+
+
+
+
 if __name__ == '__main__':
     # test_run(existing_data_path=EXISTING_DATA_DIR, existing_model_path=EXISTING_MODEL_PATH,
     #          proposal_data_path=PROPOSAL_DATA_DIR, proposal_model_path=PROPOSAL_MODEL_PATH)
-    load_test()
+    # load_test()
+    swap_output(swap=True)
