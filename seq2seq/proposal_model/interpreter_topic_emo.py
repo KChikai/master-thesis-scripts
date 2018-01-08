@@ -20,7 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from nltk import word_tokenize
 from chainer import serializers, cuda
-from tuning_util import ConvCorpus, JaConvCorpus
+from tuning_util import ConvCorpus, ExistingConvCorpus
 from external_seq2seq import MultiTaskSeq2Seq
 from setting_param import FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED, TOPIC_NUM
 
@@ -85,7 +85,7 @@ def interpreter(data_path, model_path):
     if args.lang == 'en':
         corpus = ConvCorpus(file_path=None)
     elif args.lang == 'ja':
-        corpus = JaConvCorpus(file_path=None)
+        corpus = ExistingConvCorpus(file_path=None)
     else:
         print('You gave wrong argument to this system. Check out your argument about languages.')
         raise ValueError
@@ -182,7 +182,7 @@ def test_run(data_path, model_path, n_show=80):
     if args.lang == 'en':
         corpus = ConvCorpus(file_path=None)
     elif args.lang == 'ja':
-        corpus = JaConvCorpus(file_path=None)
+        corpus = ExistingConvCorpus(file_path=None)
     else:
         print('You gave wrong argument to this system. Check out your argument about languages.')
         raise ValueError

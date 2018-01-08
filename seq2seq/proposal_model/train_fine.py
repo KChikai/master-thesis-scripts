@@ -14,8 +14,8 @@ import argparse
 import numpy as np
 import chainer
 from chainer import cuda, optimizers, serializers
-from tuning_util import JaConvCorpus, ConvCorpus
-from pretrain_seq2seq import Seq2Seq
+from tuning_util import ExistingConvCorpus, ConvCorpus
+from existing_seq2seq import Seq2Seq
 from external_seq2seq import MultiTaskSeq2Seq
 from setting_param import EPOCH, FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED, BATCH_NUM
 
@@ -79,13 +79,13 @@ def main():
 
     if os.path.exists('./data/corpus/dictionary.dict'):
         if args.lang == 'ja':
-            corpus = JaConvCorpus(file_path=None, batch_size=batchsize, size_filter=True)
+            corpus = ExistingConvCorpus(file_path=None, batch_size=batchsize, size_filter=True)
         else:
             corpus = ConvCorpus(file_path=None, batch_size=batchsize, size_filter=True)
         corpus.load(load_dir='./data/corpus/')
     else:
         if args.lang == 'ja':
-            corpus = JaConvCorpus(file_path=data_file, batch_size=batchsize, size_filter=True)
+            corpus = ExistingConvCorpus(file_path=data_file, batch_size=batchsize, size_filter=True)
         else:
             corpus = ConvCorpus(file_path=data_file, batch_size=batchsize, size_filter=True)
         corpus.save(save_dir='./data/corpus/')

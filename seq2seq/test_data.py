@@ -17,7 +17,7 @@ from chainer import serializers, cuda
 
 # model
 from existing_model.existing_seq2seq import Seq2Seq
-from existing_model.util import ExistingConvCorpus
+from existing_model.tuning_util import ExistingConvCorpus
 from proposal_model.external_seq2seq import MultiTaskSeq2Seq
 from proposal_model.tuning_util import JaConvCorpus
 from setting_param import FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED, TOPIC_NUM
@@ -26,7 +26,7 @@ from setting_param import FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED, TOPIC
 # path info
 PROPOSAL_DATA_DIR = './proposal_model/data/corpus/'
 EXISTING_DATA_DIR = './existing_model/data/corpus/'
-EXISTING_MODEL_PATH = './existing_model/data/99_third.model'
+EXISTING_MODEL_PATH = './existing_model/data/10.model'
 PROPOSAL_MODEL_PATH = './proposal_model/data/109.model'
 
 # parse command line args
@@ -67,8 +67,9 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
     データをモデルに入力してcsv file化（アノテートファイル）にする
     :return:
     """
-
-    # proposal model
+    #######################
+    # load proposal model #
+    #######################
     proposal_corpus = JaConvCorpus(file_path=None)
     proposal_corpus.load(load_dir=proposal_data_path)
     print('Vocabulary Size (number of words) :', len(proposal_corpus.dic.token2id))
@@ -80,16 +81,25 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
                                       batch_size=1, gpu_flg=args.gpu)
     serializers.load_hdf5(proposal_model_path, proposal_model)
 
-    # existing model
+    #######################
+    # load existing model #
+    #######################
     existing_corpus = ExistingConvCorpus(file_path=None)
     existing_corpus.load(load_dir=existing_data_path)
     print('Vocabulary Size (number of words) :', len(existing_corpus.dic.token2id))
     print('')
-    existing_model = Seq2Seq(len(existing_corpus.dic.token2id), feature_num=args.feature_num,
-                             hidden_num=args.hidden_num, batch_size=1, gpu_flg=args.gpu)
+    # existing_model = Seq2Seq(len(existing_corpus.dic.token2id), feature_num=args.feature_num,
+    #                          hidden_num=args.hidden_num, batch_size=1, gpu_flg=args.gpu)
+    existing_model = Seq2Seq(all_vocab_size=len(existing_corpus.dic.token2id),
+                             emotion_vocab_size=len(existing_corpus.emotion_set),
+                             feature_num=args.feature_num, hidden_num=args.hidden_num,
+                             label_num=args.label_num, label_embed_num=args.label_embed,
+                             batch_size=1, gpu_flg=args.gpu)
     serializers.load_hdf5(existing_model_path, existing_model)
 
-    # run an interpreter
+    ######################
+    # run an interpreter #
+    ######################
     data = []
     for num, input_sentence in enumerate(proposal_corpus.fine_posts):
         id_sequence = input_sentence.copy()
@@ -97,7 +107,7 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
 
         # make label lists TODO: 3値分類
         n_num = p_num = 0
-        topic_label_id = correct_emo_label = -1
+        topic_label_id = -1
         for index, w_id in enumerate(proposal_corpus.fine_cmnts[num]):
             # comment の最初にトピックラベルが付いているものとする
             if index == 0:
@@ -114,14 +124,6 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
                     n_num += 1
                 if proposal_corpus.dic[w_id] in proposal_corpus.pos_words:
                     p_num += 1
-        if (n_num + p_num) == 0:
-            correct_emo_label = 1
-        elif n_num <= p_num:
-            correct_emo_label = 2
-        elif n_num > p_num:
-            correct_emo_label = 0
-        else:
-            raise ValueError
 
         # generate an output (proposal)
         neg_output = ''
@@ -134,7 +136,6 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
             sentence = proposal_model.generate(input_sentence, input_sentence_rev, sentence_limit=len(input_sentence) + 20,
                                                emo_label_id=emo_label, topic_label_id=topic_label_id,
                                                word2id=proposal_corpus.dic.token2id, id2word=proposal_corpus.dic)
-
             if emo_label == 0:
                 # print("neg -> ", sentence)
                 neg_output = sentence
@@ -162,8 +163,10 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
         input_sentence = [existing_corpus.dic.token2id[word] for word in input_vocab if not existing_corpus.dic.token2id.get(word) is None]
         input_sentence_rev = [existing_corpus.dic.token2id[word] for word in input_vocab_rev if not existing_corpus.dic.token2id.get(word) is None]
         existing_model.initialize(batch_size=1)
-        existing_output = existing_model.generate(input_sentence, input_sentence_rev, sentence_limit=len(input_sentence) + 30,
-                                                  word2id=existing_corpus.dic.token2id, id2word=existing_corpus.dic)
+        # existing_output = existing_model.generate(input_sentence, input_sentence_rev, sentence_limit=len(input_sentence) + 30,
+        #                                           word2id=existing_corpus.dic.token2id, id2word=existing_corpus.dic)
+        existing_output = existing_model.generate(input_sentence, input_sentence_rev, sentence_limit=len(input_sentence) + 20,
+                                                  label_id=-1, word2id=existing_corpus.dic.token2id, id2word=existing_corpus.dic)
         print("-> ", existing_output)
 
         if topic_label_id == 0:
@@ -176,14 +179,16 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
         if num == 149:
             break
 
-    # second leg
+    ##############
+    # second leg #
+    ##############
     for num, input_sentence in enumerate(proposal_corpus.fine_posts[::-1]):
         id_sequence = input_sentence.copy()
         input_sentence_rev = input_sentence[::-1]
 
         # make label lists TODO: 3値分類
         n_num = p_num = 0
-        topic_label_id = correct_emo_label = -1
+        topic_label_id = -1
         for index, w_id in enumerate(proposal_corpus.fine_cmnts[::-1][num]):
             # comment の最初にトピックラベルが付いているものとする
             if index == 0:
@@ -200,14 +205,6 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
                     n_num += 1
                 if proposal_corpus.dic[w_id] in proposal_corpus.pos_words:
                     p_num += 1
-        if (n_num + p_num) == 0:
-            correct_emo_label = 1
-        elif n_num <= p_num:
-            correct_emo_label = 2
-        elif n_num > p_num:
-            correct_emo_label = 0
-        else:
-            raise ValueError
 
         # generate an output (proposal)
         neg_output = ''
@@ -248,8 +245,10 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
         input_sentence = [existing_corpus.dic.token2id[word] for word in input_vocab if not existing_corpus.dic.token2id.get(word) is None]
         input_sentence_rev = [existing_corpus.dic.token2id[word] for word in input_vocab_rev if not existing_corpus.dic.token2id.get(word) is None]
         existing_model.initialize(batch_size=1)
-        existing_output = existing_model.generate(input_sentence, input_sentence_rev, sentence_limit=len(input_sentence) + 30,
-                                                  word2id=existing_corpus.dic.token2id, id2word=existing_corpus.dic)
+        # existing_output = existing_model.generate(input_sentence, input_sentence_rev, sentence_limit=len(input_sentence) + 30,
+        #                                           word2id=existing_corpus.dic.token2id, id2word=existing_corpus.dic)
+        existing_output = existing_model.generate(input_sentence, input_sentence_rev, sentence_limit=len(input_sentence) + 20,
+                                                  label_id=-1, word2id=existing_corpus.dic.token2id, id2word=existing_corpus.dic)
         print("-> ", existing_output)
 
         if topic_label_id == 0:
@@ -262,14 +261,21 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
         if num == 149:
             break
 
+    ###########################
+    # save data as a csv file #
+    ###########################
     data_frame = pd.DataFrame(data, columns=['topic', 'input', 'output_A', 'output_B', 'fluency_A',
                                              'fluency_B', 'consistency_A', 'consistency_B', 'domain_consistency', 'emotion'])
-    data_frame.to_csv('proposal_model/data/annotation1_utf-8.csv', encoding='utf-8')
+    data_frame.to_csv('annotation_files/annotation1_utf-8.csv', encoding='utf-8')
 
 
 def load_test():
+    """
+    annotation files がロードできるかのテスト関数
+    :return:
+    """
     books = [
-             'proposal_model/data/annotation1.xlsx',
+             'annotation_files//annotation1.xlsx',
              ]
 
     sheet_name = 'annotation1'
@@ -289,6 +295,6 @@ def load_test():
 
 
 if __name__ == '__main__':
-    # test_run(existing_data_path=EXISTING_DATA_DIR, existing_model_path=EXISTING_MODEL_PATH,
-    #          proposal_data_path=PROPOSAL_DATA_DIR, proposal_model_path=PROPOSAL_MODEL_PATH)
-    load_test()
+    test_run(existing_data_path=EXISTING_DATA_DIR, existing_model_path=EXISTING_MODEL_PATH,
+             proposal_data_path=PROPOSAL_DATA_DIR, proposal_model_path=PROPOSAL_MODEL_PATH)
+    # load_test()
