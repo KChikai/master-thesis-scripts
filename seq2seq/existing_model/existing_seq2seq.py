@@ -246,6 +246,12 @@ class Seq2Seq(chainer.Chain):
             predict_vec = self.one_decode(input_id=word_id, teacher_id=None,
                                           label_id=label_id, correct_at=None, train=False)
             word = id2word[xp.argmax(predict_vec.data)]     # choose word_ID which has the highest probability
+
+            if word == "<unk>":
+                word_order = xp.argsort(-predict_vec.data, axis=1)
+                print(word_order, word_order[:, 3])
+                word = id2word[word_order[:, 3][0]]
+
             word_id = word2id[word]
             if word == "<eos>":
                 break

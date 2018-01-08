@@ -42,7 +42,7 @@ parser.add_argument('--label_num', '-ln', default=LABEL_NUM, type=int, help='dim
 parser.add_argument('--label_embed', '-le', default=LABEL_EMBED, type=int, help='dimension of label embed layer')
 parser.add_argument('--bar', '-b', default='0', type=int, help='whether to show the graph of loss values or not')
 parser.add_argument('--lang', '-l', default='ja', type=str, help='the choice of a language (Japanese "ja" or English "en" )')
-parser.add_argument('--beam_search', '-be', default=True, type=bool, help='show results using beam search')
+parser.add_argument('--beam_search', '-be', default=False, type=bool, help='show results using beam search')
 args = parser.parse_args()
 
 # GPU settings
