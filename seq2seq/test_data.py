@@ -508,10 +508,176 @@ def swap_output(swap=True):
         pass
 
 
+def evaluate_task1():
+    """
+    アノテートされたデータを評価する関数
+    :return:
+    """
+    books1 = [
+        # annotation1
+        './annotation_files/_test/annotation1_tanaka.xlsx',
+        './annotation_files/_test/annotation1_isogawa.xlsx',
+        './annotation_files/_test/annotation1_miura.xlsx',
+        './annotation_files/_test/annotation1_takayama.xlsx',
+    ]
 
+    with open('annotation_files/swap_keys.pkl', 'rb') as f:
+        swap_keys = pickle.load(f)
+
+    # making data frames
+    sheet_name = 'annotation1'
+    data_frames = []
+    for book in books1:
+        data_frames.append(pd.read_excel(book, sheet_name=sheet_name))
+
+    # counting
+    graph_data = []
+    all_fluency = [0, 0]                        # fluency[0]: 既存手法の成功数, fluency[1]: 提案手法の成功数
+    all_consistency = [0, 0]                    # consistency[0]: 既存手法の成功数, consistency[1]: 提案手法の成功数
+    all_domain_consistency = 0                  # 会話ドメイン整合性の観点で提案手法が選択された数
+    all_emotion = 0                             # 感情の豊かさで提案手法が選択された数
+    user_num = len(data_frames)                 # アノテータ数
+    for data_frame in data_frames:
+
+        text_num = 0                # テストデータ数
+        fluency = [0, 0]            # fluency[0]: 既存手法の成功数, fluency[1]: 提案手法の成功数
+        consistency = [0, 0]        # consistency[0]: 既存手法の成功数, consistency[1]: 提案手法の成功数
+        domain_consistency = 0      # 会話ドメイン整合性の観点で提案手法が選択された数
+        emotion = 0                 # 感情の豊かさで提案手法が選択された数
+        for index, line in data_frame.iterrows():
+            # data が入っている場合のみカウント
+            if not np.isnan(line['fluency_A']):
+                text_num += 1
+                if swap_keys[index]:
+                    # swap している場合（A: proposal, B: existing）
+                    fluency[0] += line['fluency_B']
+                    fluency[1] += line['fluency_A']
+                    consistency[0] += line['consistency_B']
+                    consistency[1] += line['consistency_A']
+                    if line['domain_consistency'] == 'a':
+                        domain_consistency += 1
+                    else:
+                        # none case
+                        pass
+                    if line['emotion'] == 'a':
+                        emotion += 1
+                else:
+                    # swap していない場合（A: existing, B: proposal）
+                    fluency[0] += line['fluency_A']
+                    fluency[1] += line['fluency_B']
+                    consistency[0] += line['consistency_A']
+                    consistency[1] += line['consistency_B']
+                    if line['domain_consistency'] == 'b':
+                        domain_consistency += 1
+                    else:
+                        # none case
+                        pass
+                    if line['emotion'] == 'b':
+                        emotion += 1
+        print('text num:', text_num)
+        graph_data.append([float(fluency[0] / text_num), float(fluency[1] / text_num), float(consistency[0] / text_num),
+                    float(consistency[1] / text_num), float(domain_consistency / text_num), float(emotion / text_num)])
+        all_fluency[0] += float(fluency[0] / text_num)
+        all_fluency[1] += float(fluency[1] / text_num)
+        all_consistency[0] += float(consistency[0] / text_num)
+        all_consistency[1] += float(consistency[1] / text_num)
+        all_domain_consistency += float(domain_consistency / text_num)
+        all_emotion += float(emotion / text_num)
+
+    # making graph
+    import matplotlib
+    import matplotlib.pyplot as plt
+    plt.style.use('ggplot')
+    font = {'family': 'Osaka'}
+    matplotlib.rc('font', **font)
+    plt.rcParams.update({'font.size': 10})
+    default_x = [i for i in range(1, 7)]
+    peaple = ['田中', '五十川', '三浦', '高山']
+    colors = ['b', 'g', 'r', 'y']
+    width = 0.2
+    for index, individual in enumerate(graph_data):
+        left = [i + (width * index) for i in default_x]
+        plt.bar(left=left, height=np.array(individual), width=width, label=peaple[index], color=colors[index], align='center')
+    plt.legend(loc="best")
+    plt.xticks([(i + (i + width * len(peaple)))/2 - 0.1 for i in default_x], ['fluency_A', 'fluency_B', 'consistency_A',
+                                                                              'consistency_B', 'domain_consistency', 'emotion'])
+    plt.show()
+
+    print('fluency: ', '既存手法：', float(all_fluency[0]) / float(user_num),
+                       '提案手法：', float(all_fluency[1]) / float(user_num))
+    print('consistency: ', '既存手法：', float(all_consistency[0]) / float(user_num),
+                           '提案手法：', float(all_consistency[1]) / float(user_num))
+    print('domain_consistency: ', '既存手法：', 1 - (float(all_domain_consistency) / float(user_num)),
+                                  '提案手法：', float(all_domain_consistency) / float(user_num))
+    print('emotion: ', '既存手法：', 1 - (float(all_emotion) / float(user_num)),
+                       '提案手法：', float(all_emotion) / float(user_num), end='\n\n')
+
+
+def evaluate_task2():
+    """
+    タスク２の評価用
+    :return:
+    """
+    books2 = [
+        # annotation2
+        './annotation_files/_test/annotation2_tanaka.xlsx',
+        './annotation_files/_test/annotation2_isogawa.xlsx',
+        './annotation_files/_test/annotation2_miura.xlsx',
+        './annotation_files/_test/annotation2_takayama.xlsx',
+    ]
+    with open('annotation_files/correct_emo_tag.txt', 'rb') as f:
+        correct_emo_tags = pickle.load(f)
+    print('正解タグ数：', len(correct_emo_tags))
+    # tags = ['pos', 'neg', 'neu', 'none']
+    tags = ['pos', 'neg', 'neu']
+
+    # making data frames
+    sheet_name = 'annotation2'
+    data_frames = []
+    for book in books2:
+        data_frames.append(pd.read_excel(book, sheet_name=sheet_name))
+
+    # counting
+    graph_data = []
+    all_emotion_tag = 0
+    user_num = len(data_frames)                     # アノテータ数
+    for data_frame in data_frames:
+        emotion_tag = 0                             # 感情制御の成功数
+        text_num = 0                                # テストデータ数
+        for index, line in data_frame.iterrows():
+            # data が入っている場合のみカウント
+            if isinstance(line['emotion_tag'], str) and line['emotion_tag'] in tags:
+                text_num += 1
+                if line['emotion_tag'] == correct_emo_tags[index]:
+                    emotion_tag += 1
+        print('text num:', text_num)
+        graph_data.append([float(emotion_tag / text_num)])
+        all_emotion_tag += float(emotion_tag / text_num)
+    print('emotion_tag : ', float(all_emotion_tag / user_num))
+
+    # making graph
+    import matplotlib
+    import matplotlib.pyplot as plt
+    plt.style.use('ggplot')
+    font = {'family': 'Osaka'}
+    matplotlib.rc('font', **font)
+    plt.rcParams.update({'font.size': 10})
+    default_x = [i for i in range(1, 2)]
+    peaple = ['田中', '五十川', '三浦', '高山']
+    colors = ['b', 'g', 'r', 'y']
+    width = 0.1
+    for index, individual in enumerate(graph_data):
+        left = [i + (width * index) for i in default_x]
+        plt.bar(left=left, height=np.array(individual), width=width, label=peaple[index], color=colors[index], align='center')
+    plt.legend(loc="best")
+    plt.xticks([(i + (i + width * len(peaple))) / 2 - 0.1 for i in default_x], ['emotion_tag'])
+    plt.show()
 
 if __name__ == '__main__':
     # test_run(existing_data_path=EXISTING_DATA_DIR, existing_model_path=EXISTING_MODEL_PATH,
     #          proposal_data_path=PROPOSAL_DATA_DIR, proposal_model_path=PROPOSAL_MODEL_PATH)
     # load_test()
-    swap_output(swap=True)
+    # swap_output(swap=True)
+
+    evaluate_task1()
+    evaluate_task2()
