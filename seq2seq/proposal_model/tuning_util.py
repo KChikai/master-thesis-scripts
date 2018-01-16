@@ -185,7 +185,7 @@ class ConvCorpus:
 ### 日本語用辞書クラス ###
 #######################
 
-class JaConvCorpus:
+class ExistingConvCorpus:
     """
     Dictionary Class for Japanese
     とりあえず，入力文の最後に感情値が付随しているケースを考える．
@@ -434,10 +434,10 @@ if __name__ == '__main__':
     # 日本語辞書作成
     import os
     if os.path.exists('./data/corpus/dictionary.dict'):
-        corpus = JaConvCorpus(file_path='./data/rough_pair_corpus.txt', batch_size=100, size_filter=True)
+        corpus = ExistingConvCorpus(file_path='./data/rough_pair_corpus.txt', batch_size=100, size_filter=True)
         corpus.save(save_dir='./data/corpus/')
     else:
-        corpus = JaConvCorpus(file_path=None, batch_size=100, size_filter=True)
+        corpus = ExistingConvCorpus(file_path=None, batch_size=100, size_filter=True)
         corpus.load(load_dir='./data/corpus/')
 
     ma = 0

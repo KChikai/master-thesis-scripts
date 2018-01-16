@@ -73,6 +73,86 @@ def parse_ja_text(text):
     return parse_list
 
 
+def fixed_interpreter(data_path, model_path):
+    """
+    感情タグを入力しない方，トピックラベルの方は0,1の二値を入力
+    :param data_path: the path of corpus you made model learn
+    :param model_path: the path of model you made learn
+    :return:
+    """
+    # call dictionary class
+    if args.lang == 'en':
+        corpus = ConvCorpus(file_path=None)
+    elif args.lang == 'ja':
+        corpus = ExistingConvCorpus(file_path=None)
+    else:
+        print('You gave wrong argument to this system. Check out your argument about languages.')
+        raise ValueError
+    corpus.load(load_dir=data_path)
+    print('Vocabulary Size (number of words) :', len(corpus.dic.token2id))
+    print('')
+
+    # rebuild seq2seq model
+    model = MultiTaskSeq2Seq(all_vocab_size=len(corpus.dic.token2id), emotion_vocab_size=len(corpus.emotion_set),
+                             feature_num=args.feature_num, hidden_num=args.hidden_num,
+                             label_num=args.label_num, label_embed_num=args.label_embed, batch_size=1, gpu_flg=args.gpu)
+    serializers.load_hdf5(model_path, model)
+    emo_label_index = [index for index in range(LABEL_NUM)]
+    topic_label_index = [index for index in range(TOPIC_NUM)]
+
+    # run conversation system
+    print('The system is ready to run, please talk to me!')
+    print('( If you want to end a talk, please type "exit". )')
+    print('')
+    while True:
+        print('>> ', end='')
+        sentence = input()
+        if sentence == 'exit':
+            print('See you again!')
+            break
+
+        # check a topic tag
+        input_vocab = sentence.split(' ')
+        topic_label_id = input_vocab.pop(-1)
+        label_false_flg = 1
+        for index in topic_label_index:
+            if topic_label_id == str(index):
+                topic_label_id = index             # TODO: ラベルのインデックスに注意する．今は3値分類 (0, 1, 2)
+                label_false_flg = 0
+                break
+        if label_false_flg:
+            print('caution: you donot set any enable tags!')
+            input_vocab = sentence.split(' ')
+            topic_label_id = -1
+
+        if args.lang == 'en':
+            input_vocab = [unicodedata.normalize('NFKC', word.lower()) for word in word_tokenize(sentence)]
+        elif args.lang == 'ja':
+            input_vocab = [unicodedata.normalize('NFKC', word.lower()) for word in parse_ja_text(sentence)]
+
+        input_vocab.pop(-1)
+        input_vocab_rev = input_vocab[::-1]
+
+        # convert word into ID
+        input_sentence = [corpus.dic.token2id[word] for word in input_vocab if not corpus.dic.token2id.get(word) is None]
+        input_sentence_rev = [corpus.dic.token2id[word] for word in input_vocab_rev if not corpus.dic.token2id.get(word) is None]
+
+        model.initialize(batch_size=1)
+        for emo_label in range(LABEL_NUM):
+            sentence = model.generate(input_sentence, input_sentence_rev, sentence_limit=len(input_sentence) + 20,
+                                      emo_label_id=emo_label, topic_label_id=topic_label_id,
+                                      word2id=corpus.dic.token2id, id2word=corpus.dic)
+            if emo_label == 0:
+                print("neg -> ", sentence)
+            elif emo_label == 1:
+                print("neu -> ", sentence)
+            elif emo_label == 2:
+                print("pos -> ", sentence)
+            else:
+                raise ValueError
+        print('')
+
+
 def interpreter(data_path, model_path):
     """
     Run this function, if you want to talk to seq2seq model.
@@ -233,6 +313,8 @@ def test_run(data_path, model_path, n_show=80):
         print("input : ", " ".join([corpus.dic[w_id] for w_id in id_sequence]))
         print("train emotion label: ", correct_emo_label)
         print("correct :", " ".join([corpus.dic[w_id] for index, w_id in enumerate(corpus.fine_cmnts[num]) if index != 0]))
+        print(input_sentence)
+        print(input_sentence_rev)
         for emo_label in range(LABEL_NUM):
             model.initialize(batch_size=1)
             sentence = model.generate(input_sentence, input_sentence_rev, sentence_limit=len(input_sentence) + 20,
@@ -302,9 +384,10 @@ def show_wer_chart(wer_score_path):
 
 
 if __name__ == '__main__':
-    interpreter(DATA_DIR, MODEL_PATH)
-    test_run(DATA_DIR, MODEL_PATH)
-    if args.bar:
-        show_chart(TRAIN_LOSS_PATH, TEST_LOSS_PATH)
-        show_bleu_chart(BLEU_SCORE_PATH)
-        show_wer_chart(WER_SCORE_PATH)
+    fixed_interpreter(DATA_DIR, MODEL_PATH)
+    # interpreter(DATA_DIR, MODEL_PATH)
+    # test_run(DATA_DIR, MODEL_PATH)
+    # if args.bar:
+    #     show_chart(TRAIN_LOSS_PATH, TEST_LOSS_PATH)
+    #     show_bleu_chart(BLEU_SCORE_PATH)
+    #     show_wer_chart(WER_SCORE_PATH)
