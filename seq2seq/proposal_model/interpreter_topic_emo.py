@@ -20,7 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from nltk import word_tokenize
 from chainer import serializers, cuda
-from tuning_util import ConvCorpus, ExistingConvCorpus
+from proposal_util import ConvCorpus, ProposalConvCorpus
 from external_seq2seq import MultiTaskSeq2Seq
 from setting_param import FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED, TOPIC_NUM
 
@@ -84,7 +84,7 @@ def fixed_interpreter(data_path, model_path):
     if args.lang == 'en':
         corpus = ConvCorpus(file_path=None)
     elif args.lang == 'ja':
-        corpus = ExistingConvCorpus(file_path=None)
+        corpus = ProposalConvCorpus(file_path=None)
     else:
         print('You gave wrong argument to this system. Check out your argument about languages.')
         raise ValueError
@@ -165,7 +165,7 @@ def interpreter(data_path, model_path):
     if args.lang == 'en':
         corpus = ConvCorpus(file_path=None)
     elif args.lang == 'ja':
-        corpus = ExistingConvCorpus(file_path=None)
+        corpus = ProposalConvCorpus(file_path=None)
     else:
         print('You gave wrong argument to this system. Check out your argument about languages.')
         raise ValueError
@@ -262,7 +262,7 @@ def test_run(data_path, model_path, n_show=80):
     if args.lang == 'en':
         corpus = ConvCorpus(file_path=None)
     elif args.lang == 'ja':
-        corpus = ExistingConvCorpus(file_path=None)
+        corpus = ProposalConvCorpus(file_path=None)
     else:
         print('You gave wrong argument to this system. Check out your argument about languages.')
         raise ValueError

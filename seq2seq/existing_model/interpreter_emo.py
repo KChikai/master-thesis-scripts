@@ -20,7 +20,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from nltk import word_tokenize
 from chainer import serializers, cuda
-from existing_model.tuning_util import ConvCorpus, ExistingConvCorpus
+from existing_model.existing_util import ConvCorpus, ExistingConvCorpus
 from existing_model.existing_seq2seq import Seq2Seq
 from setting_param import FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED
 

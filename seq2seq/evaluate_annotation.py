@@ -4,34 +4,12 @@
 check_kappa: fleiss's kappa のスコアを計算する関数
 evaluate1: task1のアノテートデータの評価
 evaluate2: task2のアノテートデータの評価
-
 """
 
 import nltk
 import pickle
 import numpy as np
 import pandas as pd
-
-
-def fleiss_kappa(M):
-    """
-    See `Fleiss' Kappa <https://en.wikipedia.org/wiki/Fleiss%27_kappa>`_.
-    :param M: a matrix of shape (:attr:`N`, :attr:`k`) where `N` is the number of subjects
-              and `k` is the number of categories into which assignments are made.
-              `M[i, j]` represent the number of raters who assigned the `i`th subject to the `j`th category.
-    :type M: numpy matrix
-    """
-    N, k = M.shape                         # N is # of items, k is # of categories
-    n_annotators = float(np.sum(M[0, :]))  # # of annotators
-
-    p = np.sum(M, axis=0) / (N * n_annotators)
-    P = (np.sum(M * M, axis=1) - n_annotators) / (n_annotators * (n_annotators - 1))
-    Pbar = np.sum(P) / N
-    PbarE = np.sum(p * p)
-
-    kappa = (Pbar - PbarE) / (1 - PbarE)
-
-    return kappa
 
 
 def check_kappa():
@@ -82,8 +60,6 @@ def check_kappa():
     for m in mat:
         task = nltk.AnnotationTask(data=m)
         print('fleiss kappa:', task.multi_kappa())
-        # print(task.avg_Ao())
-        # print(task.kappa())
 
 
 def evaluate_task1():
@@ -110,18 +86,18 @@ def evaluate_task1():
 
     # counting
     graph_data = []
-    all_fluency = [0, 0]  # fluency[0]: 既存手法の成功数, fluency[1]: 提案手法の成功数
-    all_consistency = [0, 0]  # consistency[0]: 既存手法の成功数, consistency[1]: 提案手法の成功数
-    all_domain_consistency = 0  # 会話ドメイン整合性の観点で提案手法が選択された数
-    all_emotion = 0  # 感情の豊かさで提案手法が選択された数
-    user_num = len(data_frames)  # アノテータ数
+    all_fluency = [0, 0]            # fluency[0]: 既存手法の成功数, fluency[1]: 提案手法の成功数
+    all_consistency = [0, 0]        # consistency[0]: 既存手法の成功数, consistency[1]: 提案手法の成功数
+    all_domain_consistency = 0      # 会話ドメイン整合性の観点で提案手法が選択された数
+    all_emotion = 0                 # 感情の豊かさで提案手法が選択された数
+    user_num = len(data_frames)     # アノテータ数
     for data_frame in data_frames:
 
-        text_num = 0  # テストデータ数
-        fluency = [0, 0]  # fluency[0]: 既存手法の成功数, fluency[1]: 提案手法の成功数
-        consistency = [0, 0]  # consistency[0]: 既存手法の成功数, consistency[1]: 提案手法の成功数
-        domain_consistency = 0  # 会話ドメイン整合性の観点で提案手法が選択された数
-        emotion = 0  # 感情の豊かさで提案手法が選択された数
+        text_num = 0                # テストデータ数
+        fluency = [0, 0]            # fluency[0]: 既存手法の成功数, fluency[1]: 提案手法の成功数
+        consistency = [0, 0]        # consistency[0]: 既存手法の成功数, consistency[1]: 提案手法の成功数
+        domain_consistency = 0      # 会話ドメイン整合性の観点で提案手法が選択された数
+        emotion = 0                 # 感情の豊かさで提案手法が選択された数
         for index, line in data_frame.iterrows():
             # data が入っている場合のみカウント
             if not np.isnan(line['fluency_A']):
@@ -258,5 +234,5 @@ def evaluate_task2():
 
 if __name__ == '__main__':
     check_kappa()
-    # evaluate_task1()
-    # evaluate_task2()
+    evaluate_task1()
+    evaluate_task2()

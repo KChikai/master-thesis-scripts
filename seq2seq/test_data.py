@@ -16,10 +16,10 @@ from chainer import serializers
 
 # model
 from existing_model.existing_seq2seq import Seq2Seq
-from existing_model.tuning_util import ExistingConvCorpus
+from existing_model.existing_util import ExistingConvCorpus
+from proposal_model.proposal_util import ProposalConvCorpus
 from proposal_model.external_seq2seq import MultiTaskSeq2Seq
 from setting_param import FEATURE_NUM, HIDDEN_NUM, LABEL_NUM, LABEL_EMBED
-
 
 # path info
 PROPOSAL_DATA_DIR = './proposal_model/data/corpus/'
@@ -68,7 +68,7 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
     #######################
     # load proposal model #
     #######################
-    proposal_corpus = ExistingConvCorpus(file_path=None)
+    proposal_corpus = ProposalConvCorpus(file_path=None)
     proposal_corpus.load(load_dir=proposal_data_path)
     print('Vocabulary Size (number of words) :', len(proposal_corpus.dic.token2id))
     print('')

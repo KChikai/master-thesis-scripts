@@ -185,7 +185,7 @@ class ConvCorpus:
 ### 日本語用辞書クラス ###
 #######################
 
-class ExistingConvCorpus:
+class ProposalConvCorpus:
     """
     Dictionary Class for Japanese
     とりあえず，入力文の最後に感情値が付随しているケースを考える．
