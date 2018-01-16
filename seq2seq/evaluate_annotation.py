@@ -56,47 +56,6 @@ def check_kappa():
     for book in books1:
         data_frames.append(pd.read_excel(book, sheet_name=sheet_name))
 
-    # making matrix
-    # mat = np.zeros((50, 6))
-    # for data_frame in data_frames:
-    #     for index, line in data_frame.iterrows():
-    #         if swap_keys[index]:
-    #             # swap している場合（A: proposal, B: existing）
-    #             row_order = [line['fluency_B'], line['fluency_A'], line['consistency_B'], line['consistency_A']]
-    #             for column in range(mat.shape[1] - 2):
-    #                 mat[index, column] += row_order[column]
-    #
-    #             if line['domain_consistency'] == 'a':
-    #                 mat[index, len(row_order)] += 1
-    #             else:
-    #                 # none case
-    #                 pass
-    #             if line['emotion'] == 'a':
-    #                 mat[index, len(row_order) + 1] += 1
-    #             else:
-    #                 pass
-    #         else:
-    #             # swap していない場合（A: existing, B: proposal）
-    #             row_order = [line['fluency_A'], line['fluency_B'], line['consistency_A'], line['consistency_B']]
-    #             for column in range(mat.shape[1] - 2):
-    #                 mat[index, column] += row_order[column]
-    #
-    #             if line['domain_consistency'] == 'b':
-    #                 mat[index, len(row_order)] += 1
-    #             else:
-    #                 # none case
-    #                 pass
-    #             if line['emotion'] == 'b':
-    #                 mat[index, len(row_order) + 1] += 1
-    #             else:
-    #                 pass
-    #
-    #         if index == 49:
-    #             break
-    # print(mat)
-    # result_value = fleiss_kappa(M=mat)
-    # print('fleiss kappa:', result_value)
-
     # make a matrix
     mat = [[] for i in range(6)]
     for coder_index, data_frame in enumerate(data_frames):
@@ -108,7 +67,6 @@ def check_kappa():
                              str(line['domain_consistency']), str(line['emotion'])]
                 for metric_index in range(len(row_order)):
                     mat[metric_index].append((coder_index, str(item_index), row_order[metric_index]))
-
             else:
                 # swap していない場合（A: existing, B: proposal）
                 row_order = [str(line['fluency_A']), str(line['fluency_B']),
