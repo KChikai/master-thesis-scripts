@@ -60,6 +60,10 @@ def parse_ja_text(text):
     return parse_list
 
 
+######################
+### 初期データの生成 ###
+######################
+
 def test_run(existing_data_path, existing_model_path, proposal_data_path, proposal_model_path):
     """
     データをモデルに入力してcsv file化（アノテートファイル）にする
@@ -439,35 +443,6 @@ def test_run(existing_data_path, existing_model_path, proposal_data_path, propos
     data_frame.to_csv('annotation_files/annotation2_utf-8.csv', encoding='utf-8')
 
 
-def load_test():
-    """
-    annotation files がロードできるかのテスト関数
-    :return:
-    """
-    # books = [
-    #          'annotation_files//annotation1.xlsx',
-    #          ]
-    #
-    # sheet_name = 'annotation1'
-    # data_flames = []
-    # for book in books:
-    #     data_flames.append(pd.read_excel(book, sheetname=sheet_name))
-    #
-    # for data_flame in data_flames:
-    #     # while len(data_flame.columns) > 6:
-    #     #     data_flame.drop(data_flame.columns[len(data_flame.columns) - 1], inplace=True, axis=1)
-    #     data_flame.columns = ['topic', 'input', 'output_A', 'output_B', 'fluency_A',
-    #                           'fluency_B', 'consistency_A', 'consistency_B', 'domain_consistency', 'emotion']
-    #
-    #     post_df = data_flame.ix[:, ['output_A']]
-    #     for _, line in post_df.iterrows():
-    #         print(line['output_A'])
-
-    with open('annotation_files/correct_emo_tag.txt', 'rb') as f:
-        correct_emo_tags = pickle.load(f)
-    print(len(correct_emo_tags), correct_emo_tags)
-
-
 def swap_output(swap=True):
     """
     出力をランダムスワップするスクリプト
@@ -507,9 +482,96 @@ def swap_output(swap=True):
         pass
 
 
+#####################################
+### 実際のアノテートデータの生成・確認 ###
+#####################################
+
+
+def recreate_annotation1_file(existing_data_path=EXISTING_DATA_DIR, existing_model_path=EXISTING_MODEL_PATH):
+    """
+    作成したアノテートファイルの再構成用関数．
+    annotation1は既存手法の出力を正しいものに差し替えを行う．
+    :return:
+    """
+
+    # load existing model
+    existing_corpus = ExistingConvCorpus(file_path=None)
+    existing_corpus.load(load_dir=existing_data_path)
+    print('Vocabulary Size (number of words) :', len(existing_corpus.dic.token2id))
+    print('')
+    existing_model = Seq2Seq(all_vocab_size=len(existing_corpus.dic.token2id),
+                             emotion_vocab_size=len(existing_corpus.emotion_set),
+                             feature_num=args.feature_num, hidden_num=args.hidden_num,
+                             label_num=args.label_num, label_embed_num=args.label_embed,
+                             batch_size=1, gpu_flg=args.gpu)
+    serializers.load_hdf5(existing_model_path, existing_model)
+
+    # load data
+    # fixed file (annotation1 を手動で調整したファイル)
+    book = './annotation_files/annotation1_fixed.xlsx'
+    sheet_name = 'annotation1'
+    with open('annotation_files/swap_keys.pkl', 'rb') as f:
+        swap_keys = pickle.load(f)
+    data_frame = pd.read_excel(book, sheet_name=sheet_name)
+
+    # make new data frame
+    data = []
+    for item_index, line in data_frame.iterrows():
+        input_vocab = [unicodedata.normalize('NFKC', word.lower()) for word in parse_ja_text(line['input'])]
+        input_vocab_rev = input_vocab[::-1]
+        input_sentence = [existing_corpus.dic.token2id[word] for word in input_vocab
+                          if not existing_corpus.dic.token2id.get(word) is None]
+        input_sentence_rev = [existing_corpus.dic.token2id[word] for word in input_vocab_rev
+                              if not existing_corpus.dic.token2id.get(word) is None]
+        existing_output = existing_model.generate(input_sentence, input_sentence_rev,
+                                                  sentence_limit=len(input_sentence) + 20,
+                                                  label_id=-1, word2id=existing_corpus.dic.token2id,
+                                                  id2word=existing_corpus.dic)
+        if swap_keys[item_index]:
+            data.append([line['topic'], line['input'], line['output_A'], existing_output,
+                         None, None, None, None, None, None])
+        else:
+            data.append([line['topic'], line['input'], existing_output, line['output_B'],
+                         None, None, None, None, None, None])
+
+    new_data_frame = pd.DataFrame(data, columns=['topic', 'input', 'output_A', 'output_B', 'fluency_A', 'fluency_B',
+                                                 'consistency_A', 'consistency_B', 'domain_consistency', 'emotion'])
+    new_data_frame.to_csv('annotation_files/_production/annotation1.csv', encoding='utf-8')
+
+
+def recreate_annotation2_file(correct_flg=True):
+    if correct_flg:
+        # load data
+        book = './annotation_files/annotation2.xlsx'
+        sheet_name = 'annotation2'
+        with open('annotation_files/correct_emo_tag.txt', 'rb') as f:
+            correct_emo_tag = pickle.load(f)
+        data_frame = pd.read_excel(book, sheet_name=sheet_name)
+
+        # make new data frame
+        data = []
+        for item_index, line in data_frame.iterrows():
+            data.append([line['topic'], line['input'], line['output'], line['emotion_tag'], correct_emo_tag[item_index]])
+        new_data_frame = pd.DataFrame(data, columns=['topic', 'input', 'output', 'emotion_tag', 'correct_emo_tag'])
+        new_data_frame.to_csv('annotation_files/annotation2_correct.csv', encoding='utf-8')
+    else:
+        # correct file をいじった後，もう一度アノテーションファイル形式に変換
+        book = './annotation_files/annotation2_correct.xlsx'
+        sheet_name = 'annotation2_correct'
+        data_frame = pd.read_excel(book, sheet_name=sheet_name)
+        data = []
+        for item_index, line in data_frame.iterrows():
+            data.append([line['topic'], line['input'], line['output'], line['emotion_tag']])
+        new_data_frame = pd.DataFrame(data, columns=['topic', 'input', 'output', 'emotion_tag'])
+        new_data_frame.to_csv('annotation_files/_production/annotation2.csv', encoding='utf-8')
+
+
 if __name__ == '__main__':
+    # 初期データの作成
     # test_run(existing_data_path=EXISTING_DATA_DIR, existing_model_path=EXISTING_MODEL_PATH,
     #          proposal_data_path=PROPOSAL_DATA_DIR, proposal_model_path=PROPOSAL_MODEL_PATH)
-    # load_test()
     # swap_output(swap=True)
-    pass
+
+    # 再構成データの作成
+    # recreate_annotation1_file()
+    recreate_annotation2_file(correct_flg=False)
