@@ -1,5 +1,13 @@
 # -*- coding:utf-8 -*-
+"""
+アノテータデータの評価用スクリプト
+check_kappa: fleiss's kappa のスコアを計算する関数
+evaluate1: task1のアノテートデータの評価
+evaluate2: task2のアノテートデータの評価
 
+"""
+
+import nltk
 import pickle
 import numpy as np
 import pandas as pd
@@ -27,6 +35,11 @@ def fleiss_kappa(M):
 
 
 def check_kappa():
+    """
+    fleiss's kappa を計算する
+    :return:
+    """
+    # load some data
     books1 = [
         # annotation1
         './annotation_files/_test/annotation1_tanaka.xlsx',
@@ -34,7 +47,6 @@ def check_kappa():
         './annotation_files/_test/annotation1_miura.xlsx',
         './annotation_files/_test/annotation1_takayama.xlsx',
     ]
-
     with open('annotation_files/swap_keys.pkl', 'rb') as f:
         swap_keys = pickle.load(f)
 
@@ -85,6 +97,7 @@ def check_kappa():
     # result_value = fleiss_kappa(M=mat)
     # print('fleiss kappa:', result_value)
 
+    # make a matrix
     mat = [[] for i in range(6)]
     for coder_index, data_frame in enumerate(data_frames):
         for item_index, line in data_frame.iterrows():
@@ -103,12 +116,12 @@ def check_kappa():
                              str(line['domain_consistency']), str(line['emotion'])]
                 for metric_index in range(len(row_order)):
                     mat[metric_index].append((coder_index, str(item_index), row_order[metric_index]))
+            # TODO: 本番は除去
             if item_index == 49:
                 break
-    import nltk
+
+    # show fleiss's kappa for each evaluation metrics
     for m in mat:
-        # for t in m:
-        #     print(t)
         task = nltk.AnnotationTask(data=m)
         print('fleiss kappa:', task.multi_kappa())
         # print(task.avg_Ao())
@@ -238,8 +251,8 @@ def evaluate_task2():
     with open('annotation_files/correct_emo_tag.txt', 'rb') as f:
         correct_emo_tags = pickle.load(f)
     print('正解タグ数：', len(correct_emo_tags))
-    # tags = ['pos', 'neg', 'neu', 'none']
-    tags = ['pos', 'neg', 'neu']
+    # tags = ['pos', 'neg', 'neu', 'none']         # none を考慮するケース
+    tags = ['pos', 'neg', 'neu']                   # none を考慮しないケース
 
     # making data frames
     sheet_name = 'annotation2'
@@ -250,10 +263,10 @@ def evaluate_task2():
     # counting
     graph_data = []
     all_emotion_tag = 0
-    user_num = len(data_frames)  # アノテータ数
+    user_num = len(data_frames)             # アノテータ数
     for data_frame in data_frames:
-        emotion_tag = 0  # 感情制御の成功数
-        text_num = 0  # テストデータ数
+        emotion_tag = 0                     # 感情制御の成功数
+        text_num = 0                        # テストデータ数
         for index, line in data_frame.iterrows():
             # data が入っている場合のみカウント
             if isinstance(line['emotion_tag'], str) and line['emotion_tag'] in tags:
