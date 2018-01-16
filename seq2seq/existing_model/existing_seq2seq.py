@@ -249,7 +249,7 @@ class Seq2Seq(chainer.Chain):
 
             if word == "<unk>":
                 word_order = xp.argsort(-predict_vec.data, axis=1)
-                print(word_order, word_order[:, 3])
+                # print(word_order, word_order[:, 3])
                 word = id2word[word_order[:, 3][0]]
 
             word_id = word2id[word]
