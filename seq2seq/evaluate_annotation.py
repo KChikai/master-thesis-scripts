@@ -4,12 +4,14 @@
 check_kappa: fleiss's kappa のスコアを計算する関数
 evaluate1: task1のアノテートデータの評価
 evaluate2: task2のアノテートデータの評価
+
 """
 
 import nltk
 import pickle
 import numpy as np
 import pandas as pd
+from test_data import parse_ja_text
 
 
 def check_kappa():
@@ -232,7 +234,80 @@ def evaluate_task2():
     plt.show()
 
 
+def emotion_word():
+    """
+    感情語彙が正しく出力されているかどうかをカウントする関数
+    :return:
+    """
+
+    # data path
+    book = './annotation_files/_production/annotation2.xlsx'
+    pos_path = './proposal_model/data/corpus/pos.set'
+    neg_path = './proposal_model/data/corpus/neg.set'
+
+    # load data
+    with open(pos_path, 'rb') as f:
+        pos_words = pickle.load(f)
+    with open(neg_path, 'rb') as f:
+        neg_words = pickle.load(f)
+
+    # for w in pos_words:
+    #     if w in neg_words:
+    #         print("warning: the same word ", w, "in each dictionaries!")
+
+    sheet_name = 'annotation2'
+    df = pd.read_excel(book, sheet_name=sheet_name)
+    with open('annotation_files/correct_emo_tag.txt', 'rb') as f:
+        correct_emo_tags = pickle.load(f)
+
+    # count correct emotion words
+    contain_pos_dic = {}
+    contain_neg_dic = {}
+    pos_neg_text = 0
+    correct = 0
+    for index, line in df.iterrows():
+        output_wakati = parse_ja_text(line['output'])
+        if correct_emo_tags[index] == 'pos':
+            pos_neg_text += 1
+            for word in output_wakati:
+                if word in pos_words:
+                    correct += 1
+                    if contain_pos_dic.get(word) is None:
+                        contain_pos_dic[word] = 1
+                    else:
+                        contain_pos_dic[word] += 1
+                    break
+            # else:
+            #     # 感情語彙が含まれていない応答のケース
+            #     print(correct_emo_tags[index], output_wakati)
+        elif correct_emo_tags[index] == 'neg':
+            pos_neg_text += 1
+            for word in output_wakati:
+                if word in neg_words:
+                    correct += 1
+                    if contain_neg_dic.get(word) is None:
+                        contain_neg_dic[word] = 1
+                    else:
+                        contain_neg_dic[word] += 1
+                    break
+            # else:
+            #     # 感情語彙が含まれていない応答のケース
+            #     print(correct_emo_tags[index], output_wakati)
+        else:
+            # if neu or none
+            pass
+    print('評価対象文（positive or negative）: ', pos_neg_text)
+    print('正解数: ', correct)
+    print('EmotionWord: ', float(correct / pos_neg_text), end='\n\n')
+    print('----- positive words -----')
+    for k, v in sorted(contain_pos_dic.items(), key=lambda x: -x[1]):
+        print(str(k) + "," + str(v))
+    print('----- negative words -----')
+    for k, v in sorted(contain_neg_dic.items(), key=lambda x: -x[1]):
+        print(str(k) + "," + str(v))
+
 if __name__ == '__main__':
-    check_kappa()
-    evaluate_task1()
-    evaluate_task2()
+    # check_kappa()
+    # evaluate_task1()
+    # evaluate_task2()
+    emotion_word()
