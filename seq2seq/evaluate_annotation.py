@@ -15,6 +15,7 @@ import matplotlib
 from test_data import parse_ja_text
 matplotlib.use('agg')
 
+
 def check_kappa1():
     """
     fleiss's kappa を計算する
@@ -138,6 +139,7 @@ def evaluate_task1():
         data_frames.append(pd.read_excel(book, sheet_name=sheet_name))
 
     # counting
+    stat_data = []
     graph_data = []
     all_fluency = [0, 0]            # fluency[0]: 既存手法の成功数, fluency[1]: 提案手法の成功数
     all_consistency = [0, 0]        # consistency[0]: 既存手法の成功数, consistency[1]: 提案手法の成功数
@@ -191,6 +193,39 @@ def evaluate_task1():
         all_consistency[1] += float(consistency[1] / text_num)
         all_domain_consistency += float(domain_consistency / text_num)
         all_emotion += float(emotion / text_num)
+
+        stat_data.append([float(fluency[0] / text_num), float(fluency[1] / text_num),
+                          float(consistency[0] / text_num), float(consistency[1] / text_num),
+                          float(domain_consistency / text_num), 1 - float(domain_consistency / text_num),
+                          float(emotion / text_num), 1 - float(emotion / text_num)])
+
+    # for index, individual in enumerate(graph_data):
+    #     print(individual)
+    import scipy.stats
+    df = pd.DataFrame(stat_data, columns=['fluency_A', 'fluency_B',
+                                          'consistency_A', 'consistency_B',
+                                          'domain_consistency_A', 'domain_consistency_B',
+                                          'emotion_A', 'emotion_B'])
+
+    t, p = scipy.stats.ttest_rel(df['fluency_A'], df['fluency_B'])
+    print(t, p)
+    t, p = scipy.stats.ttest_rel(df['consistency_A'], df['consistency_B'])
+    print(t, p)
+    t, p = scipy.stats.ttest_rel(df['domain_consistency_A'], df['domain_consistency_B'])
+    print(t, p)
+    t, p = scipy.stats.ttest_rel(df['emotion_A'], df['emotion_B'])
+    print(t, p, end='\n\n')
+
+    t, p = scipy.stats.ttest_ind(df['fluency_A'], df['fluency_B'], equal_var=False)
+    print(t, p)
+    t, p = scipy.stats.ttest_ind(df['consistency_A'], df['consistency_B'], equal_var=False)
+    print(t, p)
+    t, p = scipy.stats.ttest_ind(df['domain_consistency_A'], df['domain_consistency_B'], equal_var=False)
+    print(t, p)
+    t, p = scipy.stats.ttest_ind(df['emotion_A'], df['emotion_B'], equal_var=False)
+    print(t, p, end='\n\n')
+
+    # df.to_excel('annotation_files/result.xlsx', encoding='utf-8')
 
     # making graph
     # import matplotlib
@@ -267,7 +302,7 @@ def evaluate_task2():
                 text_num += 1
                 if line['emotion_tag'] == correct_emo_tags[index]:
                     emotion_tag += 1
-        print('text num:', text_num)
+        print('text num:', text_num, 'emotion tag (solo):', float(emotion_tag / text_num))
         graph_data.append([float(emotion_tag / text_num)])
         all_emotion_tag += float(emotion_tag / text_num)
     print('emotion_tag : ', float(all_emotion_tag / user_num))
@@ -449,6 +484,7 @@ def check_corpus():
 def check_task2():
     """
     pos, neg, neu の分類失敗ケースの分析
+    ヒートマップの作成・失敗例と感情語彙の表示を行う
     :return:
     """
     books2 = [
@@ -519,61 +555,210 @@ def check_task2():
                 mat[row, column] += 1
     print(mat)
 
-    #call dictionary class
-    from proposal_util import ProposalConvCorpus
-    DATA_DIR = './proposal_model/data/corpus/'
-    corpus = ProposalConvCorpus(file_path=None)
-    corpus.load(load_dir=DATA_DIR)
-
-    # show text
-    for data_frame in data_frames:
-        for index, line in data_frame.iterrows():
-            if wrong_neg[index] >= 3:
-                print(wrong_neg[index], ',', line['output'])
-        break
-    print('---------------------------------')
-    for data_frame in data_frames:
-        for index, line in data_frame.iterrows():
-            if wrong_pos[index] >= 3:
-                print(wrong_pos[index], ',', line['output'])
-        break
-
-    for data_frame in data_frames:
-        for index, line in data_frame.iterrows():
-            if wrong_neg[index] >= 3:
-                nl = [word for word in line['output'].split(' ') if word in corpus.neg_words]
-                pl = [word for word in line['output'].split(' ') if word in corpus.pos_words]
-                print(wrong_neg[index], nl, pl)
-        break
-    print('---------------------------------')
-    for data_frame in data_frames:
-        for index, line in data_frame.iterrows():
-            if wrong_pos[index] >= 3:
-                nl = [word for word in line['output'].split(' ') if word in corpus.neg_words]
-                pl = [word for word in line['output'].split(' ') if word in corpus.pos_words]
-                print(wrong_pos[index], nl, pl)
-        break
+    # #call dictionary class
+    # from proposal_util import ProposalConvCorpus
+    # DATA_DIR = './proposal_model/data/corpus/'
+    # corpus = ProposalConvCorpus(file_path=None)
+    # corpus.load(load_dir=DATA_DIR)
+    #
+    # # show text
+    # for data_frame in data_frames:
+    #     for index, line in data_frame.iterrows():
+    #         if wrong_neg[index] >= 3:
+    #             print(wrong_neg[index], ',', line['output'])
+    #     break
+    # print('---------------------------------')
+    # for data_frame in data_frames:
+    #     for index, line in data_frame.iterrows():
+    #         if wrong_pos[index] >= 3:
+    #             print(wrong_pos[index], ',', line['output'])
+    #     break
+    #
+    # for data_frame in data_frames:
+    #     for index, line in data_frame.iterrows():
+    #         if wrong_neg[index] >= 3:
+    #             nl = [word for word in line['output'].split(' ') if word in corpus.neg_words]
+    #             pl = [word for word in line['output'].split(' ') if word in corpus.pos_words]
+    #             print(wrong_neg[index], nl, pl)
+    #     break
+    # print('---------------------------------')
+    # for data_frame in data_frames:
+    #     for index, line in data_frame.iterrows():
+    #         if wrong_pos[index] >= 3:
+    #             nl = [word for word in line['output'].split(' ') if word in corpus.neg_words]
+    #             pl = [word for word in line['output'].split(' ') if word in corpus.pos_words]
+    #             print(wrong_pos[index], nl, pl)
+    #     break
 
     # グラフの可視化
     import seaborn
     import matplotlib.pyplot as plt
-    seaborn.set()
+    seaborn.set(font_scale=2.0)
     # matplotlib.rc('font', family='sans-serif')
     plt.rcParams['font.family'] = 'IPAPGothic'
     cmap = seaborn.diverging_palette(220, 10, as_cmap=True)
-    seaborn.heatmap(mat, cmap=cmap, center=0, annot=True, fmt='g',
-                    linewidths=0.5, xticklabels=['Positive', 'Neutral', 'Negative'],
-                    yticklabels=['Positive', 'Neutral', 'Negative'])
-    plt.xlabel('評価者がアノテートしたラベル')
-    plt.ylabel('学習時に利用した正解ラベル')
-    plt.savefig('./annotation_files/heatmap.png')
+
+    mat_prob = np.zeros(mat.shape)
+    for row in range(mat.shape[0]):
+        mat_prob[row, :] = mat[row, :] / np.sum(mat[row, :])
+
+    ax = seaborn.heatmap(mat_prob, cmap=cmap, center=0, annot=True, fmt='.01%', vmin=0, vmax=0.75,
+                         linewidths=0.5, xticklabels=['Positive', 'Neutral', 'Negative'],
+                         yticklabels=['Positive', 'Neutral', 'Negative'])
+    cbar = ax.collections[0].colorbar
+    cbar.set_ticks([0, .25, .50, .75])
+    cbar.set_ticklabels(['0%', '25%', '50%', '75%'])
+    # plt.xlabel('評価者がアノテートしたラベル')
+    # plt.ylabel('学習時に利用した正解ラベル')
+    plt.xlabel("Annotators' judgments")
+    plt.ylabel('True sentiments')
+    # plt.savefig('./annotation_files/heatmap.png')
+    plt.savefig('./annotation_files/heatmap_en.png', bbox_inches="tight")
+
+
+def check_length():
+    """
+    ACLの追加項目（平均文書長を求める）
+    :return:
+    """
+    books = [
+        './annotation_files/_production/annotation1.xlsx',
+    ]
+    with open('annotation_files/swap_keys.pkl', 'rb') as f:
+        swap_keys = pickle.load(f)
+
+    # making data frames
+    sheet_name = 'annotation1'
+    data_frames = []
+    for book in books:
+        data_frames.append(pd.read_excel(book, sheet_name=sheet_name))
+
+    text_num = 0
+    existing_len = 0
+    existing_hensa = []
+    proposal_len = 0
+    proposal_hensa = []
+    for data_frame in data_frames:
+        for index, line in data_frame.iterrows():
+            # data が入っている場合のみカウント
+            if isinstance(line['output_A'], str):
+                text_num += 1
+                if swap_keys[index]:
+                    # swap している場合（A: proposal, B: existing）
+                    proposal_len += len(line['output_A'])
+                    proposal_hensa.append(len(line['output_A']))
+                    existing_len += len(line['output_B'])
+                    existing_hensa.append(len(line['output_B']))
+                else:
+                    # swap していない場合（A: existing, B: proposal）
+                    existing_len += len(line['output_A'])
+                    existing_hensa.append(len(line['output_A']))
+                    proposal_len += len(line['output_B'])
+                    proposal_hensa.append(len(line['output_B']))
+    print("テキスト：", text_num)
+    print("既存手法：", float(existing_len / text_num), np.std(existing_hensa))
+    print("提案手法：", float(proposal_len / text_num), np.std(proposal_hensa))
+
+
+def domain_and_sentiment_richness():
+    """
+    ドメインと感情両方で提案手法が選ばれた割合と件数
+    :return:
+    """
+    # load result data
+    books1 = [
+        './annotation_files/_production/annotation1_maekawa.xlsx',
+        './annotation_files/_production/annotation1_wakuta.xlsx',
+        './annotation_files/_production/annotation1_sasaki.xlsx',
+        './annotation_files/_production/annotation1_nagata.xlsx',
+        './annotation_files/_production/annotation1_takebayashi.xlsx',
+    ]
+    with open('annotation_files/swap_keys.pkl', 'rb') as f:
+        swap_keys = pickle.load(f)
+
+    # making data frames
+    sheet_name = 'annotation1'
+    data_frames = []
+    for book in books1:
+        data_frames.append(pd.read_excel(book, sheet_name=sheet_name))
+
+    # counting
+    confidence = [0] * len(data_frames)
+    exist_confidence = [0] * len(data_frames)
+    results = [0] * 300
+    exist_results = [0] * 300
+    all_domain_and_sentiment = all_exist_domain_and_sentiment = 0
+    user_num = len(data_frames)      # アノテータ数
+    for user_index, data_frame in enumerate(data_frames):
+
+        text_num = 0                 # テストデータ数
+        domain_consistency = 0       # 会話ドメイン整合性の観点で提案手法が選択された数
+        emotion = 0                  # 感情の豊かさで提案手法が選択された数
+        domain_and_sentiment = 0     # ドメインと感情が両方発現している（既存手法よりも選ばれているケース）
+        exist_domain_and_sentiment = 0
+
+        for index, line in data_frame.iterrows():
+            # data が入っている場合のみカウント
+            if not np.isnan(line['fluency_A']):
+                text_num += 1
+                if swap_keys[index]:
+                    # swap している場合（A: proposal, B: existing）
+                    if line['domain_consistency'] == 'a' and line['emotion'] == 'a':
+                        domain_and_sentiment += 1
+                        results[index] += 1
+                    if line['domain_consistency'] == 'b' and line['emotion'] == 'b':
+                        exist_domain_and_sentiment += 1
+                        exist_results[index] += 1
+                else:
+                    # swap していない場合（A: existing, B: proposal）
+                    if line['domain_consistency'] == 'b' and line['emotion'] == 'b':
+                        domain_and_sentiment += 1
+                        results[index] += 1
+                    if line['domain_consistency'] == 'a' and line['emotion'] == 'a':
+                        exist_domain_and_sentiment += 1
+                        exist_results[index] += 1
+        print('user index:', user_index)
+        print('ユーザが両方提案手法を選択した応答文数（300件中）:', domain_and_sentiment)
+        print('ユーザが両方既存手法を選択した応答文数（300件中）:', exist_domain_and_sentiment)
+
+        all_domain_and_sentiment += float(domain_and_sentiment / text_num)
+        all_exist_domain_and_sentiment += float(exist_domain_and_sentiment / text_num)
+
+        confidence[user_index] += float(domain_and_sentiment / text_num)
+        exist_confidence[user_index] += float(exist_domain_and_sentiment / text_num)
+
+    # overall results
+    all_correct = all_exist_correct = 0
+    for correct in results:
+        if correct >= -(-user_num // 2):
+            all_correct += 1
+
+    for exist_correct in exist_results:
+        if exist_correct >= -(-user_num // 2):
+            all_exist_correct += 1
+
+    print('両方提案手法が選ばれたケース（5人のアノテータの過半数が選んだ応答のみ考慮）：',
+          all_correct, float(all_correct / len(results)))
+    print('両方既存手法が選ばれたケース（5人のアノテータの過半数が選んだ応答のみ考慮）：',
+          all_exist_correct, float(all_exist_correct / len(results)))
+    print('両方ユーザが両方の評価指標で提案手法を選んだ応答文数の平均値：',
+          float(all_domain_and_sentiment / user_num))
+    print('両方ユーザが両方の評価指標で既存手法を選んだ応答文数の平均値：',
+          float(all_exist_domain_and_sentiment / user_num))
+
+    for _ in confidence:
+        print(_)
+    for _ in exist_confidence:
+        print(_)
 
 
 if __name__ == '__main__':
-    check_kappa1()
-    check_kappa2()
-    evaluate_task1()
-    evaluate_task2()
-    emotion_word()
-    check_corpus()
-    check_task2()
+    # check_kappa1()
+    # check_kappa2()
+    # evaluate_task1()
+    # evaluate_task2()
+    # emotion_word()
+    # check_corpus()
+    # check_task2()
+    # check_length()
+    domain_and_sentiment_richness()
